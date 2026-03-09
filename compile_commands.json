@@ -1,0 +1,98 @@
+[
+  {
+    "file": "src/routing/router.c",
+    "arguments": [
+      "gcc",
+      "-Wall",
+      "-Wextra",
+      "-Iinclude",
+      "-g",
+      "-c",
+      "src/routing/router.c",
+      "-o",
+      "obj/routing/router.o"
+    ],
+    "directory": "/home/moses/projects/project5",
+    "output": "obj/routing/router.o"
+  },
+  {
+    "file": "src/core/scoket.c",
+    "arguments": [
+      "gcc",
+      "-Wall",
+      "-Wextra",
+      "-Iinclude",
+      "-g",
+      "-c",
+      "src/core/scoket.c",
+      "-o",
+      "obj/core/scoket.o"
+    ],
+    "directory": "/home/moses/projects/project5",
+    "output": "obj/core/scoket.o"
+  },
+  {
+    "file": "src/core/main.c",
+    "arguments": [
+      "gcc",
+      "-Wall",
+      "-Wextra",
+      "-Iinclude",
+      "-g",
+      "-c",
+      "src/core/main.c",
+      "-o",
+      "obj/core/main.o"
+    ],
+    "directory": "/home/moses/projects/project5",
+    "output": "obj/core/main.o"
+  },
+  {
+    "file": "src/core/server.c",
+    "arguments": [
+      "gcc",
+      "-Wall",
+      "-Wextra",
+      "-Iinclude",
+      "-g",
+      "-c",
+      "src/core/server.c",
+      "-o",
+      "obj/core/server.o"
+    ],
+    "directory": "/home/moses/projects/project5",
+    "output": "obj/core/server.o"
+  },
+  {
+    "file": "src/http/http.c",
+    "arguments": [
+      "gcc",
+      "-Wall",
+      "-Wextra",
+      "-Iinclude",
+      "-g",
+      "-c",
+      "src/http/http.c",
+      "-o",
+      "obj/http/http.o"
+    ],
+    "directory": "/home/moses/projects/project5",
+    "output": "obj/http/http.o"
+  },
+  {
+    "file": "src/http/response.c",
+    "arguments": [
+      "gcc",
+      "-Wall",
+      "-Wextra",
+      "-Iinclude",
+      "-g",
+      "-c",
+      "src/http/response.c",
+      "-o",
+      "obj/http/response.o"
+    ],
+    "directory": "/home/moses/projects/project5",
+    "output": "obj/http/response.o"
+  }
+]
