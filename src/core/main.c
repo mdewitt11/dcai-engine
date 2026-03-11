@@ -91,7 +91,7 @@ int main(int argc, char *argv[]) {
          my_node_id);
 
   ai_node_start(config.port, config.target_ip, config.target_port,
-                config.num_threads, config.max_queue_size);
+                config.num_threads, config.max_queue_size, &config);
 
   return 0;
 }

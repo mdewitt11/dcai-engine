@@ -1,5 +1,6 @@
 #include "engine.h"
 #include "peer.h"
+#include "protocol.h"
 #include "server.h"
 #include "threadpool.h" // ADD THIS
 #include <asm-generic/errno-base.h>
@@ -10,6 +11,25 @@
 #include <unistd.h>
 
 #define MAX_EVENTS 64
+#define MAX_PEERS 100
+int connected_peers[MAX_PEERS];
+int peer_count = 0;
+
+// Call this EXACTLY where your log said "[+] New peer connected"
+void add_peer_to_swarm(int client_fd) {
+  if (peer_count < MAX_PEERS) {
+    connected_peers[peer_count++] = client_fd;
+  }
+}
+
+// The Mouth
+void ai_node_broadcast(AISignal *signal) {
+  printf("[Net] Broadcasting thought (MsgID: %u) to %d swarm peers...\n",
+         signal->message_id, peer_count);
+  for (int i = 0; i < peer_count; i++) {
+    write(connected_peers[i], signal, sizeof(AISignal));
+  }
+}
 
 // ADD THE THREADPOOL ARGUMENT HERE
 void run_epoll_engine(int master_socket, int outbound_socket, int port,

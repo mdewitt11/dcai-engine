@@ -1,5 +1,6 @@
 #include "admin.h"
 #include "ai.h"
+#include "engine.h"
 #include "protocol.h"
 #include <stddef.h>
 #include <stdio.h>
@@ -49,5 +50,12 @@ void process_admin_command(int client_fd, AdminCommand *cmd,
 
   printf("[Admin] Translation complete. Brain generated thought. Ready to "
          "broadcast to swarm.\n");
-  // TODO: Actually send network_response out to the connected peers
+
+  // 4. Drop it into the brain!
+  ai_process_forward_signal(&new_thought, &network_response);
+
+  printf("[Admin] Translation complete. Broadcasting to swarm.\n");
+
+  // THE NEW LINE: Fire it over the network!
+  ai_node_broadcast(&network_response);
 }
