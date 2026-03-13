@@ -6,6 +6,22 @@
 Breadcrumb trail_cache[MAX_BREADCRUMBS];
 pthread_mutex_t cache_lock = PTHREAD_MUTEX_INITIALIZER;
 
+// Returns 1 if we've seen this thought before, 0 if it is brand new
+int protocol_is_duplicate(uint32_t msg_id) {
+  pthread_mutex_lock(&cache_lock);
+  int is_dup = 0;
+
+  for (int i = 0; i < MAX_BREADCRUMBS; i++) {
+    if (trail_cache[i].message_id == msg_id && trail_cache[i].source_fd != -1) {
+      is_dup = 1; // Found it! It's an echo.
+      break;
+    }
+  }
+
+  pthread_mutex_unlock(&cache_lock);
+  return is_dup;
+}
+
 void protocol_init_cache() {
   pthread_mutex_lock(&cache_lock);
   for (int i = 0; i < MAX_BREADCRUMBS; i++) {

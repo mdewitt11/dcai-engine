@@ -13,5 +13,8 @@ typedef struct {
 } NodeConfig;
 
 int load_config(const char *filepath, NodeConfig *config);
+int get_json_int(const char *json, const char *key, int default_val);
+void get_json_string(const char *json, const char *key, char *out_buffer,
+                     const char *default_val);
 
 #endif

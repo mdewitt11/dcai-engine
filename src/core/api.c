@@ -6,6 +6,7 @@
 #include "server.h"
 #include "threadpool.h"
 #include <stdio.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -33,45 +34,58 @@ void *admin_airlock_loop(void *arg) {
   while (1) {
     // This thread will just sleep here until Python connects
     int client_fd = accept(admin_fd, NULL, NULL);
-    if (client_fd < 0)
-      continue;
+    if (client_fd >= 0) {
 
-    AdminCommand cmd;
-    int bytes_read = read(client_fd, &cmd, sizeof(AdminCommand));
+      // 1. Create a clean buffer for the JSON
+      char buffer[2048];
+      memset(buffer, 0, sizeof(buffer));
 
-    if (bytes_read == sizeof(AdminCommand)) {
-      // Drop the pebble into the AI!
-      process_admin_command(client_fd, &cmd, config);
-    } else {
-      printf("[Admin] Malformed payload received. Dropping.\n");
+      // 2. Read the raw JSON from Python using YOUR client_fd
+      int bytes_read = read(client_fd, buffer, sizeof(buffer) - 1);
+
+      if (bytes_read > 0) {
+        // 3. Cap the string so the JSON parser doesn't crash
+        buffer[bytes_read] = '\0';
+
+        // 4. Pass the string, the fd, and the config!
+        process_admin_command(buffer, client_fd, config);
+      } else {
+        close(client_fd);
+      }
     }
-
-    close(client_fd); // Hang up the phone after one command
+    return NULL;
   }
-  return NULL;
 }
 
-void ai_node_start(int my_port, const char *peer_ip, int peer_port,
-                   int num_threads, int queue_limit, NodeConfig *config) {
+void ai_node_start(NodeConfig *config) {
   int outbound_socket = -1;
 
-  pthread_t admin_thread_id;
-  if (pthread_create(&admin_thread_id, NULL, admin_airlock_loop, config) != 0) {
-    printf("[!] Failed to spawn Admin thread.\n");
+  ThreadPool *pool =
+      threadpool_create(config->num_threads, config->max_queue_size);
+  if (!pool) {
+    printf("[!] Failed to initialize ThreadPool.\n");
+    return;
   }
 
-  if (peer_ip != NULL && peer_port > 0) {
-    outbound_socket = connect_to_node(peer_ip, peer_port);
+  if (config->target_ip != '\0' && strlen(config->target_ip) > 0 &&
+      config->target_port > 0) {
+    printf("[*] Attempting to connect to %s:%d...\n", config->target_ip,
+           config->target_port);
+
+    outbound_socket = connect_to_node(config->target_ip, config->target_port);
+
+    if (outbound_socket >= 0) {
+      printf("[+] Successfully connected to Node at %s:%d!\n",
+             config->target_ip, config->target_port);
+    } else {
+      printf("[-] Failed to connect to seed node. Booting isolated.\n");
+    }
   }
 
-  ThreadPool *pool = threadpool_create(num_threads, queue_limit);
-  int master_socket = setup_listening_socket(my_port);
+  printf("[Engine] Booting Multiplexed Engine...\n");
+  engine_start_multiplexed(config, outbound_socket);
 
-  // This will now block UNTIL keep_running is set to 0
-  run_epoll_engine(master_socket, outbound_socket, my_port, pool);
-  printf("[Engine] Booting classic Swarm Engine on port %d...\n", config->port);
-
-  // WHEN IT UNBLOCKS, CLEAN UP!
+  // WHEN IT UNBLOCKS (Ctrl+C), CLEAN UP!
   threadpool_destroy(pool);
   printf("[*] Node successfully shut down. Goodbye!\n");
 }

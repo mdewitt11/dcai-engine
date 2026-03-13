@@ -18,7 +18,7 @@ static void generate_unique_node_id(char *buffer, size_t max_len) {
 }
 
 // Ultra-forgiving integer parser
-static int get_json_int(const char *json, const char *key, int default_val) {
+int get_json_int(const char *json, const char *key, int default_val) {
   char *pos =
       strstr(json, key); // Look for the key (even if quotes are missing/weird)
   if (pos) {
@@ -36,8 +36,8 @@ static int get_json_int(const char *json, const char *key, int default_val) {
 }
 
 // Ultra-forgiving string parser
-static void get_json_string(const char *json, const char *key, char *out_buffer,
-                            const char *default_val) {
+void get_json_string(const char *json, const char *key, char *out_buffer,
+                     const char *default_val) {
   strcpy(out_buffer, default_val); // Set default first
 
   const char *pos = strstr(json, key);

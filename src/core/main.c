@@ -1,6 +1,7 @@
 #include "ai.h" // NEW: For the AI brain
 #include "api.h"
 #include "config.h"
+#include "engine.h"
 #include "protocol.h" // NEW: For the routing cache
 #include <signal.h>
 #include <stdio.h>
@@ -56,8 +57,7 @@ void incoming_data_handler(int client_fd, char *data, int size) {
       // Drop it into the brain!
       AISignal outgoing_thought;
       ai_process_forward_signal(incoming_thought, &outgoing_thought);
-
-      // TODO: Broadcast 'outgoing_thought' to all other connected peers
+      ai_node_broadcast(&outgoing_thought);
       printf("[*] Brain generated response. Ready to broadcast.\n");
     }
   }
@@ -90,8 +90,7 @@ int main(int argc, char *argv[]) {
   printf("[App] Booting Engine on port %d (Node ID: %s)...\n", config.port,
          my_node_id);
 
-  ai_node_start(config.port, config.target_ip, config.target_port,
-                config.num_threads, config.max_queue_size, &config);
+  ai_node_start(&config);
 
   return 0;
 }

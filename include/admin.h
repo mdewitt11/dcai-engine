@@ -17,7 +17,7 @@ typedef struct {
 } AdminCommand;
 #pragma pack(pop)
 
-void process_admin_command(int client_fd, AdminCommand *cmd,
+void process_admin_command(const char *json_payload, int client_fd,
                            NodeConfig *config);
 
 #endif

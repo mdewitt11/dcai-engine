@@ -1,6 +1,7 @@
 #ifndef SERVER_H
 #define SERVER_H
 
+#include "config.h"
 typedef enum {
   SOCKET_SWARM_LISTENER,
   SOCKET_ADMIN_LISTENER,
@@ -16,5 +17,6 @@ typedef struct {
 
 int set_nonblocking(int fd);
 int setup_listening_socket(int port);
+void engine_start_multiplexed(NodeConfig *config, int outbound_sockect);
 
 #endif
