@@ -1,2 +1,5 @@
 test/
 .cache/
+obj/
+dcai/
+gobin/
