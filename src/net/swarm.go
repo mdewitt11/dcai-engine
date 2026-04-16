@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"strconv"
@@ -9,23 +10,21 @@ import (
 )
 
 func handleSwarmConnection(conn net.Conn) {
-	peerAddr := conn.RemoteAddr().String()
-
-	peerMutex.Lock()
-	activePeers[peerAddr] = &Peer{Conn: conn, ListenPort: 0}
-	peerMutex.Unlock()
+	var remoteNodeID string
 
 	defer func() {
-		fmt.Printf("[-] Swarm Peer disconnected: %s\n", peerAddr)
-		peerMutex.Lock()
-		delete(activePeers, peerAddr)
-		peerMutex.Unlock()
-		_ = conn.Close()
+		if remoteNodeID != "" {
+			fmt.Printf("[-] Swarm Peer disconnected: %s\n", remoteNodeID)
+			peerMutex.Lock()
+			delete(activePeers, remoteNodeID)
+			peerMutex.Unlock()
+		}
+		conn.Close()
 	}()
 
-	// 1. FIRE HANDSHAKE IMMEDIATELY ON CONNECT
-	handshake := fmt.Sprintf("HANDSHAKE|%d\n", localListenPort)
-	_, _ = conn.Write([]byte(handshake))
+	// 1. FIRE MULTIADDR HANDSHAKE
+	handshake := fmt.Sprintf("HANDSHAKE|%s\n", localMultiaddr)
+	conn.Write([]byte(handshake))
 
 	reader := bufio.NewReader(conn)
 
@@ -44,61 +43,88 @@ func handleSwarmConnection(conn net.Conn) {
 		packetType := parts[0]
 
 		// ==========================================
-		// PEX PROTOCOL: THE HANDSHAKE
+		// PEX: HANDSHAKE
+		// ==========================================
+		// ==========================================
+		// PEX: HANDSHAKE (Upgraded)
 		// ==========================================
 		if packetType == "HANDSHAKE" && len(parts) >= 2 {
-			port, _ := strconv.Atoi(parts[1])
-			fmt.Printf("\n[PEX] 🤝 Caught Handshake! Peer is listening on Port %d\n", port)
+			multiaddr := parts[1]
+			_, _, nodeID := parseMultiaddr(multiaddr)
+			if nodeID == "" {
+				continue
+			}
+
+			remoteNodeID = nodeID
+			fmt.Printf("\n[PEX] 🤝 Handshake verified. Peer Identity: %s\n", nodeID)
 
 			peerMutex.Lock()
-			if p, exists := activePeers[peerAddr]; exists {
-				p.ListenPort = port
-			}
+			activePeers[nodeID] = &Peer{NodeID: nodeID, Multiaddr: multiaddr, Conn: conn}
 			peerMutex.Unlock()
 
-			// THE SEED REPLY: Build a list of all OTHER peers we know
-			var knownPorts []string
+			// SUBSET GOSSIPING: Build a list, but cap it to prevent storms!
+			var knownAddrs []string
 			peerMutex.RLock()
-			for _, p := range activePeers {
-				if p.ListenPort > 0 && p.ListenPort != port && p.ListenPort != localListenPort {
-					knownPorts = append(knownPorts, strconv.Itoa(p.ListenPort))
+			for id, p := range activePeers {
+				if id != nodeID && id != NodeID {
+					knownAddrs = append(knownAddrs, p.Multiaddr)
+				}
+				// Break early if we've gathered enough peers to share
+				if len(knownAddrs) >= MaxGossipPeers {
+					break
 				}
 			}
 			peerMutex.RUnlock()
 
-			// Fire the address book back to the new node!
-			if len(knownPorts) > 0 {
-				reply := fmt.Sprintf("PEERLIST|%s\n", strings.Join(knownPorts, ","))
-				_, _ = conn.Write([]byte(reply))
-				fmt.Printf("[PEX] 📖 Sent Peer List (%d peers) back to Port %d!\n", len(knownPorts), port)
+			if len(knownAddrs) > 0 {
+				reply := fmt.Sprintf("PEERLIST|%s\n", strings.Join(knownAddrs, ","))
+				conn.Write([]byte(reply))
+				fmt.Printf("[PEX] 📖 Shared %d known peers with %s!\n", len(knownAddrs), nodeID)
 			}
 		} else
 
 		// ==========================================
-		// PEX PROTOCOL: AUTO-DISCOVERY
+		// PEX: AUTO-DISCOVERY (Upgraded)
 		// ==========================================
 		if packetType == "PEERLIST" && len(parts) >= 2 {
-			ports := strings.Split(parts[1], ",")
-			fmt.Printf("\n[PEX] 🔭 Caught Peer List! Swarm gave us %d new ports to dial.\n", len(ports))
+			addrs := strings.Split(parts[1], ",")
 
-			for _, portStr := range ports {
-				targetPort, _ := strconv.Atoi(portStr)
+			// THE BRAKE: Do we actually need more friends?
+			peerMutex.RLock()
+			currentPeerCount := len(activePeers)
+			peerMutex.RUnlock()
 
-				// Don't dial ourselves, and don't dial people we already know!
-				if targetPort == localListenPort || alreadyKnowsPort(targetPort) {
+			if currentPeerCount >= MaxActivePeers {
+				fmt.Println("[PEX] 🛑 Peer list received, but we are at MAX capacity. Ignoring.")
+				continue
+			}
+
+			fmt.Printf("\n[PEX] 🔭 Swarm offered %d Multiaddrs. Filtering...\n", len(addrs))
+
+			for _, addrStr := range addrs {
+				ip, port, targetID := parseMultiaddr(addrStr)
+
+				// Don't dial ourselves, people we know, OR dial if we hit the cap mid-loop!
+				if targetID == NodeID || alreadyKnowsPeer(targetID) {
 					continue
 				}
 
-				fmt.Printf("[PEX] 🚀 Auto-Dialing new Swarm friend on Port: %d...\n", targetPort)
-				go dialPeer(targetPort)
+				peerMutex.RLock()
+				count := len(activePeers)
+				peerMutex.RUnlock()
+
+				if count >= MaxActivePeers {
+					break // Stop dialing immediately!
+				}
+
+				fmt.Printf("[PEX] 🚀 Auto-Dialing new identity: %s...\n", targetID)
+				go dialPeer(ip, port)
 			}
 		} else
-
 		// ==========================================
 		// ROUTING: THE BOOMERANG PROTOCOL
 		// ==========================================
 		if packetType == "THOUGHT" && len(parts) >= 5 {
-			// FORMAT: THOUGHT | MSG_ID | ENERGY | IS_RETURN | PAYLOAD
 			msgID := parts[1]
 			energy, _ := strconv.Atoi(parts[2])
 			isReturn := parts[3]
@@ -112,76 +138,84 @@ func handleSwarmConnection(conn net.Conn) {
 
 				if exists {
 					fmt.Printf("[🪃 Boomerang] Routing %s backwards along breadcrumb trail...\n", msgID)
-					// Forward it EXACTLY as it came in (is_return is still 1)
-					_, _ = originConn.Write([]byte(rawMsg + "\n"))
-				} else {
-					fmt.Printf("[🪃 Boomerang] Trail went cold for %s. Dropping.\n", msgID)
+					originConn.Write([]byte(rawMsg + "\n"))
 				}
-				continue // Skip the rest of the loop!
+				continue
 			}
 
 			// --- ROUTE B: THE FORWARD RIPPLE ---
-			// 1. Check for Duplicate/Echo
 			cacheMutex.RLock()
 			_, duplicate := breadcrumbCache[msgID]
 			cacheMutex.RUnlock()
 
 			if duplicate {
-				continue // We already saw this! Drop it.
+				continue // Drop duplicates to prevent infinite loops
 			}
 
-			// 2. Drop the Breadcrumb (Save the socket so we can boomerang later)
 			cacheMutex.Lock()
 			breadcrumbCache[msgID] = conn
 			cacheMutex.Unlock()
 
-			// 3. Process locally in C Brain
-			// 3. Process locally in C Brain
-			thoughtQueue <- ThoughtTask{MsgID: msgID, Payload: payload} // 4. Energy Decay & Propagation
+			// Send to the local C Brain
+			thoughtQueue <- ThoughtTask{MsgID: msgID, Payload: payload}
 
+			// Energy Decay & Propagation
 			relayEnergy := energy - 1
 			if relayEnergy > 0 {
-				// Relay to the Swarm
 				relayPacket := fmt.Sprintf("THOUGHT|%s|%d|0|%s\n", msgID, relayEnergy, payload)
 				broadcastRaw(relayPacket, conn)
 			} else {
-				// ENERGY DEPLETED! Flip the flag and bounce it back!
 				fmt.Printf("[🪃 Boomerang] Energy depleted for %s! Bouncing back to sender.\n", msgID)
 				returnPacket := fmt.Sprintf("THOUGHT|%s|0|1|%s (Swarm Reply)\n", msgID, payload)
-				_, _ = conn.Write([]byte(returnPacket))
+				conn.Write([]byte(returnPacket))
 			}
 		}
 	}
 }
 
-func dialPeer(port int) {
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
-	conn, err := net.Dial("tcp", addr)
+// Parses: /ip4/127.0.0.1/tcp/8000/p2p/NodeID
+func parseMultiaddr(maddr string) (string, int, string) {
+	parts := strings.Split(maddr, "/")
+	if len(parts) >= 7 && parts[1] == "ip4" && parts[3] == "tcp" && parts[5] == "p2p" {
+		ip := parts[2]
+		port, _ := strconv.Atoi(parts[4])
+		id := parts[6]
+		return ip, port, id
+	}
+	return "", 0, ""
+}
+
+func dialPeer(ip string, port int) {
+	addr := fmt.Sprintf("%s:%d", ip, port)
+	conn, err := tls.Dial("tcp", addr, swarmTLSConfig)
 	if err == nil {
-		fmt.Printf("[PEX] ✅ Successfully connected to %d!\n", port)
+		fmt.Printf("[PEX] ✅ Successfully securely connected to %s!\n", addr)
 		go handleSwarmConnection(conn)
-	} else {
-		fmt.Printf("[PEX] ❌ Failed to auto-dial %d.\n", port)
 	}
 }
 
-func alreadyKnowsPort(port int) bool {
+func alreadyKnowsPeer(nodeID string) bool {
 	peerMutex.RLock()
 	defer peerMutex.RUnlock()
-	for _, p := range activePeers {
-		if p.ListenPort == port {
-			return true
-		}
-	}
-	return false
+	_, exists := activePeers[nodeID]
+	return exists
 }
 
+// UPGRADED: Now includes detailed terminal logging!
 func broadcastRaw(packet string, exclude net.Conn) {
 	peerMutex.RLock()
 	defer peerMutex.RUnlock()
-	for _, p := range activePeers {
+
+	broadcastCount := 0
+	for id, p := range activePeers {
 		if p.Conn != exclude {
-			_, _ = p.Conn.Write([]byte(packet))
+			p.Conn.Write([]byte(packet))
+			broadcastCount++
+			fmt.Printf("[Broadcast] 📡 Relayed packet to peer: %s\n", id)
 		}
+	}
+
+	if broadcastCount == 0 {
+		fmt.Printf("[Broadcast] ⚠️ Notice: Tried to broadcast, but no eligible peers were found!\n")
 	}
 }

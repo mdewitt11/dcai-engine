@@ -1,13 +1,19 @@
 package main
 
 import (
+	"crypto/tls"
 	"net"
 	"sync"
 )
 
+// ==========================================
+// SWARM STATE MEMORY
+// ==========================================
+
 type Peer struct {
-	Conn       net.Conn
-	ListenPort int
+	NodeID    string // The cryptographic identity
+	Multiaddr string // /ip4/127.0.0.1/tcp/8000/p2p/NodeID
+	Conn      net.Conn
 }
 
 type ThoughtTask struct {
@@ -16,17 +22,22 @@ type ThoughtTask struct {
 }
 
 var (
+	// The Swarm Address Book (Now keyed by NodeID instead of IP!)
 	activePeers = make(map[string]*Peer)
 	peerMutex   sync.RWMutex
 
 	breadcrumbCache = make(map[string]net.Conn)
 	cacheMutex      sync.RWMutex
+	adminWaiters    = make(map[string]chan string)
+	thoughtQueue    = make(chan ThoughtTask, 1000)
 
-	// NEW: A map of channels to hold Python scripts waiting for answers!
-	adminWaiters = make(map[string]chan string)
-
-	// Updated to use the struct
-	thoughtQueue = make(chan ThoughtTask, 1000)
+	// NEW: Prevent broadcast storms!
+	MaxActivePeers = 5
+	MaxGossipPeers = 3
 
 	localListenPort int
+	localMultiaddr  string
+
+	// NEW: The Global TLS Configuration for the Swarm
+	swarmTLSConfig *tls.Config
 )

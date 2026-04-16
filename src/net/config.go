@@ -46,11 +46,7 @@ func loadConfig(filepath string) {
 		}
 	}
 
-	// 4. Generate Unique Node ID (Identical to your C logic)
-	hostname, err := os.Hostname()
-	if err != nil {
-		hostname = "unknown_host"
-	}
-	NodeID = fmt.Sprintf("%s-%04X%04X", hostname, rand.Intn(0xFFFF), rand.Intn(0xFFFF))
+	// Generate a purely random, anonymous Node ID (e.g., "node-7A2B-9C4F")
+	NodeID = fmt.Sprintf("node-%04X-%04X", rand.Intn(0xFFFF), rand.Intn(0xFFFF))
 	fmt.Printf("[*] Node ID Generated: %s\n", NodeID)
 }
