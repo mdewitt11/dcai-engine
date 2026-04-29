@@ -9,7 +9,8 @@ A lightweight, experimental peer-to-peer compute network built in Go.
 
 DCAI explores how computation—eventually including AI workloads—can be distributed across a network of independent nodes instead of relying on centralized APIs and infrastructure.
 
-Today, most access to advanced AI systems is tied to usage-based pricing, API keys, and centralized control. This project investigates an alternative approach:
+Today, most access to advanced AI systems is tied to usage-based pricing, API keys, and centralized control. This project investigates an alternative approach 
 of sharing compute across peers in a decentralized network
+
 ---
 
