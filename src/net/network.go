@@ -44,9 +44,22 @@ func StartSwarmNetwork(c_config_path *C.char) {
 		go dialPeer(GlobalConfig.TargetIP, GlobalConfig.TargetPort)
 	}
 
-	// 2. BOOT LISTENERS (Pass TLS to Swarm, nil to Admin!)
+	// Ensure they exist (creates the folder and files if needed)
+	ensureAdminCerts()
+
+	// Load them from the new crypto/ directory
+	adminCert, err := tls.LoadX509KeyPair("crypto/admin.crt", "crypto/admin.key")
+	if err != nil {
+		fmt.Printf("[Engine] 🚨 Failed to load Admin keys: %v\n", err)
+		return
+	}
+	adminTLSConfig := &tls.Config{
+		Certificates: []tls.Certificate{adminCert},
+	}
+
+	// Boot the ports, passing their respective TLS configurations!
 	go startListener(GlobalConfig.Port, "SWARM", handleSwarmConnection, swarmTLSConfig)
-	go startListener(GlobalConfig.AdminPort, "ADMIN", handleAdminConnection, nil)
+	go startListener(GlobalConfig.AdminPort, "ADMIN", handleAdminConnection, adminTLSConfig)
 
 	select {}
 }

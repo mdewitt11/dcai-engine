@@ -23,7 +23,7 @@ func handleSwarmConnection(conn net.Conn) {
 	}()
 
 	// 1. FIRE MULTIADDR HANDSHAKE
-	handshake := fmt.Sprintf("HANDSHAKE|%s\n", localMultiaddr)
+	handshake := fmt.Sprintf("HANDSHAKE|%s|%d\n", localMultiaddr, version)
 	conn.Write([]byte(handshake))
 
 	reader := bufio.NewReader(conn)
@@ -50,16 +50,21 @@ func handleSwarmConnection(conn net.Conn) {
 		// ==========================================
 		if packetType == "HANDSHAKE" && len(parts) >= 2 {
 			multiaddr := parts[1]
+			PeerVersion, err := strconv.Atoi(parts[2])
 			_, _, nodeID := parseMultiaddr(multiaddr)
 			if nodeID == "" {
 				continue
+			}
+
+			if err != nil {
+				panic(err)
 			}
 
 			remoteNodeID = nodeID
 			fmt.Printf("\n[PEX] 🤝 Handshake verified. Peer Identity: %s\n", nodeID)
 
 			peerMutex.Lock()
-			activePeers[nodeID] = &Peer{NodeID: nodeID, Multiaddr: multiaddr, Conn: conn}
+			activePeers[nodeID] = &Peer{NodeID: nodeID, Multiaddr: multiaddr, Conn: conn, PeerVersion: PeerVersion}
 			peerMutex.Unlock()
 
 			// SUBSET GOSSIPING: Build a list, but cap it to prevent storms!

@@ -11,9 +11,10 @@ import (
 // ==========================================
 
 type Peer struct {
-	NodeID    string // The cryptographic identity
-	Multiaddr string // /ip4/127.0.0.1/tcp/8000/p2p/NodeID
-	Conn      net.Conn
+	NodeID      string // The cryptographic identity
+	Multiaddr   string // /ip4/127.0.0.1/tcp/8000/p2p/NodeID
+	Conn        net.Conn
+	PeerVersion int
 }
 
 type ThoughtTask struct {
@@ -34,6 +35,10 @@ var (
 	// NEW: Prevent broadcast storms!
 	MaxActivePeers = 5
 	MaxGossipPeers = 3
+
+	version = 1
+
+	isDocker = false
 
 	localListenPort int
 	localMultiaddr  string

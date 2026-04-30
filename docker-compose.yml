@@ -1,0 +1,21 @@
+services:
+  seed-node:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: dcai-seed-node
+
+    ports:
+      - "8081:8081"
+
+    volumes:
+      # Persist config so it doesn't reset every restart
+      - ./config:/app/config
+
+    working_dir: /app
+
+    environment:
+      - GO_ENV=production
+
+    restart: unless-stopped

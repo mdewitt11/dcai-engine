@@ -1,5 +1,30 @@
-test/
-.cache/
-obj/
+# =========================
+# DCAI Engine .gitignore
+# =========================
+
+# 1. Compiled Binaries
 dcai
+main
+*.exe
+
+# 2. C / C++ Build Artifacts
+obj/
+*.o
+*.a
+*.so
+compile_commands.json
+
+crypto/*.key
+crypto/*.crt
+
+# 3. Go Build Artifacts
 gobin/
+test/
+*.test
+go.work
+
+# 4. OS / Environment Junk
+.DS_Store
+Thumbs.db
+.env
+.cache
